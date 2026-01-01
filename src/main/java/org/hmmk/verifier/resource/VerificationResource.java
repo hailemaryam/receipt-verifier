@@ -149,24 +149,57 @@ public class VerificationResource {
          * @param reference The Dashen transaction reference number
          * @return The verification result
          */
-        @GET
-        @Path("/dashen/{reference}")
-        @Operation(summary = "Verify Dashen Receipt", description = "Fetches and verifies a Dashen Bank payment receipt by its transaction reference number")
-        @APIResponses({
-                        @APIResponse(responseCode = "200", description = "Verification completed", content = @Content(schema = @Schema(implementation = DashenVerifyResult.class))),
-                        @APIResponse(responseCode = "400", description = "Invalid reference")
-        })
-        public Response verifyDashen(
-                        @Parameter(description = "Dashen transaction reference number", required = true) @PathParam("reference") String reference) {
+//        @GET
+//        @Path("/dashen/{reference}")
+//        @Operation(summary = "Verify Dashen Receipt", description = "Fetches and verifies a Dashen Bank payment receipt by its transaction reference number")
+//        @APIResponses({
+//                        @APIResponse(responseCode = "200", description = "Verification completed", content = @Content(schema = @Schema(implementation = DashenVerifyResult.class))),
+//                        @APIResponse(responseCode = "400", description = "Invalid reference")
+//        })
+//        public Response verifyDashen(
+//                        @Parameter(description = "Dashen transaction reference number", required = true) @PathParam("reference") String reference) {
+//
+//                if (reference == null || reference.isBlank()) {
+//                        return Response.status(Response.Status.BAD_REQUEST)
+//                                        .entity(new ErrorResponse("Reference is required"))
+//                                        .build();
+//                }
+//
+//                DashenVerifyResult result = dashenService.verifyDashen(reference.trim());
+//                return Response.ok(result).build();
+//        }
 
-                if (reference == null || reference.isBlank()) {
+        @Inject
+        org.hmmk.verifier.service.UnifiedVerificationService unifiedService;
+
+        /**
+         * Unified verification endpoint for various bank types.
+         * Coordinates bank service call, external callback, and persistence.
+         *
+         * @param request The unified verification request
+         * @return The process result
+         */
+        @POST
+        @Path("/unified")
+        @Operation(summary = "Unified Bank Receipt Verification", description = "Verifies receipts across different banks, notifies external systems, and persists results")
+        @APIResponses({
+                        @APIResponse(responseCode = "200", description = "Verification process completed", content = @Content(schema = @Schema(implementation = org.hmmk.verifier.dto.UnifiedVerifyResult.class))),
+                        @APIResponse(responseCode = "400", description = "Invalid request or bank service error")
+        })
+        public Response verifyUnified(org.hmmk.verifier.dto.UnifiedVerifyRequest request) {
+                if (request == null || request.getReference() == null || request.getBankType() == null
+                                || request.getSenderId() == null) {
                         return Response.status(Response.Status.BAD_REQUEST)
-                                        .entity(new ErrorResponse("Reference is required"))
+                                        .entity(new ErrorResponse("Bank type, reference, and senderId are required"))
                                         .build();
                 }
 
-                DashenVerifyResult result = dashenService.verifyDashen(reference.trim());
-                return Response.ok(result).build();
+                org.hmmk.verifier.dto.UnifiedVerifyResult result = unifiedService.processVerification(request);
+                if (result.isSuccess()) {
+                        return Response.ok(result).build();
+                } else {
+                        return Response.status(Response.Status.BAD_REQUEST).entity(result).build();
+                }
         }
 
         /**
