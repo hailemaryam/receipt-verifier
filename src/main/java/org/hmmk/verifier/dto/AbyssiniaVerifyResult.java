@@ -22,6 +22,8 @@ public class AbyssiniaVerifyResult {
     private String payer;
     private String payerAccount;
     private String sourceAccountName;
+    private String receiverAccount;
+    private String receiverName;
     private BigDecimal amount;
     private LocalDateTime date;
     private String reference;
@@ -29,12 +31,15 @@ public class AbyssiniaVerifyResult {
     private String error;
 
     public static AbyssiniaVerifyResult success(String payer, String payerAccount, String sourceAccountName,
+            String receiverAccount, String receiverName,
             BigDecimal amount, LocalDateTime date, String reference, String narrative) {
         return AbyssiniaVerifyResult.builder()
                 .success(true)
                 .payer(payer)
                 .payerAccount(payerAccount)
                 .sourceAccountName(sourceAccountName)
+                .receiverAccount(receiverAccount)
+                .receiverName(receiverName)
                 .amount(amount)
                 .date(date)
                 .reference(reference)

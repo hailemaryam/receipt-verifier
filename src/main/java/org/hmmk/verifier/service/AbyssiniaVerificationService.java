@@ -137,6 +137,8 @@ public class AbyssiniaVerificationService {
             String payerName = transaction.path("Payer's Name").asText("");
             String sourceAccount = transaction.path("Source Account").asText("");
             String sourceAccountName = transaction.path("Source Account Name").asText("");
+            String receiverAccount = transaction.path("Receiver's Account").asText("");
+            String receiverName = transaction.path("Receiver's Name").asText("");
             String amountStr = transaction.path("Transferred Amount").asText("");
             String dateStr = transaction.path("Transaction Date").asText("");
             String reference = transaction.path("Transaction Reference").asText("");
@@ -171,7 +173,7 @@ public class AbyssiniaVerificationService {
             }
 
             return AbyssiniaVerifyResult.success(
-                    payerName, sourceAccount, sourceAccountName, amount, date, reference, narrative);
+                    payerName, sourceAccount, sourceAccountName, receiverAccount, receiverName,amount, date, reference, narrative);
 
         } catch (IOException e) {
             LOG.errorf("❌ Failed to parse Abyssinia JSON: %s", e.getMessage());
