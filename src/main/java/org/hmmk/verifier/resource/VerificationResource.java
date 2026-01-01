@@ -168,4 +168,10 @@ public class VerificationResource {
 //                DashenVerifyResult result = dashenService.verifyDashen(reference.trim());
 //                return Response.ok(result).build();
 //        }
+
+        /**
+         * Simple error response DTO.
+         */
+        public record ErrorResponse(String error) {
+        }
 }
