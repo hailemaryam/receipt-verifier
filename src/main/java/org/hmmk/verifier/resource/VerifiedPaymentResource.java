@@ -63,7 +63,7 @@ public class VerifiedPaymentResource {
 
         if (bankType != null && !bankType.isBlank()) {
             query.append(" and bankType = :bankType");
-            params.and("bankType", bankType.trim().toUpperCase());
+            params.and("bankType", bankType.trim());
         }
 
         if (fromDate != null) {

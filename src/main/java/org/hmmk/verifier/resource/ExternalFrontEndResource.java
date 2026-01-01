@@ -5,21 +5,14 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.enums.ParameterIn;
+import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
-import org.hmmk.verifier.dto.AbyssiniaVerifyResult;
-import org.hmmk.verifier.dto.CbeVerifyResult;
-import org.hmmk.verifier.dto.TelebirrReceipt;
-import org.hmmk.verifier.service.AbyssiniaVerificationService;
-import org.hmmk.verifier.service.CbeVerificationService;
-import org.hmmk.verifier.service.DashenVerificationService;
-import org.hmmk.verifier.service.TelebirrVerificationService;
-
-import java.util.Optional;
 
 /**
  * REST resource for receipt verification endpoints.
@@ -27,7 +20,7 @@ import java.util.Optional;
 @Path("/api/verify-receipt")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@Tag(name = "Receipt Verification", description = "Endpoints for verifying payment receipts")
+@Tag(name = "Receipt Verification For External Front End", description = "Endpoints for verifying payment receipts")
 public class ExternalFrontEndResource {
 
         @Inject
@@ -44,9 +37,13 @@ public class ExternalFrontEndResource {
         @Operation(summary = "Unified Bank Receipt Verification", description = "Verifies receipts across different banks, notifies external systems, and persists results")
         @APIResponses({
                         @APIResponse(responseCode = "200", description = "Verification process completed", content = @Content(schema = @Schema(implementation = org.hmmk.verifier.dto.UnifiedVerifyResult.class))),
-                        @APIResponse(responseCode = "400", description = "Invalid request or bank service error")
+                        @APIResponse(responseCode = "400", description = "Invalid request or bank service error"),
+                        @APIResponse(responseCode = "401", description = "Invalid or missing API-Key")
         })
-        public Response verifyUnified(org.hmmk.verifier.dto.UnifiedVerifyRequest request) {
+        @Parameter(name = "API-Key", description = "Required API Key for authentication", required = true, in = ParameterIn.HEADER, schema = @Schema(type = SchemaType.STRING))
+        public Response verifyUnified(
+                        @HeaderParam("API-Key") String apiKeyHeader,
+                        org.hmmk.verifier.dto.UnifiedVerifyRequest request) {
                 if (request == null || request.getReference() == null || request.getBankType() == null
                                 || request.getSenderId() == null) {
                         return Response.status(Response.Status.BAD_REQUEST)
