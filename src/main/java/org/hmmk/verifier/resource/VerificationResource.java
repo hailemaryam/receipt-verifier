@@ -168,43 +168,4 @@ public class VerificationResource {
 //                DashenVerifyResult result = dashenService.verifyDashen(reference.trim());
 //                return Response.ok(result).build();
 //        }
-
-        @Inject
-        org.hmmk.verifier.service.UnifiedVerificationService unifiedService;
-
-        /**
-         * Unified verification endpoint for various bank types.
-         * Coordinates bank service call, external callback, and persistence.
-         *
-         * @param request The unified verification request
-         * @return The process result
-         */
-        @POST
-        @Path("/unified")
-        @Operation(summary = "Unified Bank Receipt Verification", description = "Verifies receipts across different banks, notifies external systems, and persists results")
-        @APIResponses({
-                        @APIResponse(responseCode = "200", description = "Verification process completed", content = @Content(schema = @Schema(implementation = org.hmmk.verifier.dto.UnifiedVerifyResult.class))),
-                        @APIResponse(responseCode = "400", description = "Invalid request or bank service error")
-        })
-        public Response verifyUnified(org.hmmk.verifier.dto.UnifiedVerifyRequest request) {
-                if (request == null || request.getReference() == null || request.getBankType() == null
-                                || request.getSenderId() == null) {
-                        return Response.status(Response.Status.BAD_REQUEST)
-                                        .entity(new ErrorResponse("Bank type, reference, and senderId are required"))
-                                        .build();
-                }
-
-                org.hmmk.verifier.dto.UnifiedVerifyResult result = unifiedService.processVerification(request);
-                if (result.isSuccess()) {
-                        return Response.ok(result).build();
-                } else {
-                        return Response.status(Response.Status.BAD_REQUEST).entity(result).build();
-                }
-        }
-
-        /**
-         * Simple error response DTO.
-         */
-        public record ErrorResponse(String error) {
-        }
 }
