@@ -65,34 +65,51 @@ public class TelebirrVerificationService {
     private Optional<TelebirrReceipt> fetchFromPrimarySource(String reference) {
         String url = primaryUrl + reference;
 
-        try {
-            LOG.infof("Attempting to fetch Telebirr receipt from primary source: %s", url);
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofMillis(timeout))
-                    .GET()
-                    .build();
+        int maxAttempts = 3;
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            LOG.debugf("Received response with status: %d", response.statusCode());
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                LOG.infof("Attempt %d/%d to fetch Telebirr receipt from primary source: %s", attempt, maxAttempts, url);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofMillis(timeout))
+                        .GET()
+                        .build();
 
-            if (response.statusCode() != 200) {
-                LOG.warnf("Primary source returned non-200 status: %d", response.statusCode());
-                return Optional.empty();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                LOG.debugf("Received response with status: %d", response.statusCode());
+
+                if (response.statusCode() == 200) {
+                    TelebirrReceipt receipt = scrapeTelebirrReceipt(response.body());
+                    LOG.infof("Successfully extracted Telebirr data for reference: %s, receiptNo: %s",
+                            reference, receipt.getReceiptNo());
+                    return Optional.of(receipt);
+                } else {
+                    LOG.warnf("Attempt %d/%d: Primary source returned non-200 status: %d", attempt, maxAttempts,
+                            response.statusCode());
+                }
+
+            } catch (IOException | InterruptedException e) {
+                LOG.errorf("Attempt %d/%d: Error fetching Telebirr receipt from primary source %s: %s", attempt,
+                        maxAttempts, url, e.getMessage());
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
 
-            TelebirrReceipt receipt = scrapeTelebirrReceipt(response.body());
-            LOG.infof("Successfully extracted Telebirr data for reference: %s, receiptNo: %s",
-                    reference, receipt.getReceiptNo());
-            return Optional.of(receipt);
-
-        } catch (IOException | InterruptedException e) {
-            LOG.errorf("Error fetching Telebirr receipt from primary source %s: %s", url, e.getMessage());
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
+            if (attempt < maxAttempts) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
-            return Optional.empty();
         }
+
+        LOG.errorf("Telebirr verification failed for reference: %s after %d attempts", reference, maxAttempts);
+        return Optional.empty();
     }
 
     /**

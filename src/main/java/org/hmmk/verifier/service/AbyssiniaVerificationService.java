@@ -62,32 +62,56 @@ public class AbyssiniaVerificationService {
         String fullId = reference + suffix;
         String url = abyssiniaUrl + fullId;
 
-        try {
-            LOG.infof("🏦 Attempting Abyssinia verification: %s", url);
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofMillis(timeout))
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build();
+        int maxAttempts = 3;
+        Exception lastException = null;
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                LOG.infof("🏦 Attempt %d/%d Abyssinia verification: %s", attempt, maxAttempts, url);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofMillis(timeout))
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                        .header("Accept", "application/json")
+                        .GET()
+                        .build();
 
-            if (response.statusCode() != 200) {
-                LOG.errorf("❌ Abyssinia API returned HTTP error: %d", response.statusCode());
-                return AbyssiniaVerifyResult.failure("HTTP error: " + response.statusCode());
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == 200) {
+                    return parseAbyssiniaResponse(response.body());
+                }
+
+                LOG.errorf("❌ Attempt %d/%d Abyssinia API returned HTTP error: %d", attempt, maxAttempts,
+                        response.statusCode());
+                if (attempt == maxAttempts) {
+                    return AbyssiniaVerifyResult
+                            .failure("HTTP error: " + response.statusCode() + " after " + maxAttempts + " attempts");
+                }
+
+            } catch (IOException | InterruptedException e) {
+                LOG.errorf("❌ Attempt %d/%d Error fetching Abyssinia receipt: %s", attempt, maxAttempts,
+                        e.getMessage());
+                lastException = e;
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
 
-            return parseAbyssiniaResponse(response.body());
-
-        } catch (IOException | InterruptedException e) {
-            LOG.errorf("❌ Error fetching Abyssinia receipt: %s", e.getMessage());
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
+            if (attempt < maxAttempts) {
+                try {
+                    // Short delay between retries
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
-            return AbyssiniaVerifyResult.failure("Error fetching receipt: " + e.getMessage());
         }
+
+        String errorMsg = lastException != null ? lastException.getMessage() : "Unknown error";
+        return AbyssiniaVerifyResult.failure("Error fetching receipt after " + maxAttempts + " attempts: " + errorMsg);
     }
 
     private AbyssiniaVerifyResult parseAbyssiniaResponse(String jsonString) {

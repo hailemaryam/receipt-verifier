@@ -83,31 +83,54 @@ public class DashenVerificationService {
     public DashenVerifyResult verifyDashen(String reference) {
         String url = dashenUrl + reference;
 
-        try {
-            LOG.infof("🔎 Attempting Dashen verification: %s", url);
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofMillis(timeout))
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                    .header("Accept", "application/pdf")
-                    .GET()
-                    .build();
+        int maxAttempts = 3;
+        Exception lastException = null;
 
-            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                LOG.infof("🔎 Attempt %d/%d Dashen verification: %s", attempt, maxAttempts, url);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofMillis(timeout))
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                        .header("Accept", "application/pdf")
+                        .GET()
+                        .build();
 
-            if (response.statusCode() != 200) {
-                return DashenVerifyResult.failure("HTTP error: " + response.statusCode());
+                HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+                if (response.statusCode() == 200) {
+                    return parseDashenReceipt(response.body());
+                }
+
+                LOG.errorf("❌ Attempt %d/%d Dashen API returned HTTP error: %d", attempt, maxAttempts,
+                        response.statusCode());
+                if (attempt == maxAttempts) {
+                    return DashenVerifyResult
+                            .failure("HTTP error: " + response.statusCode() + " after " + maxAttempts + " attempts");
+                }
+
+            } catch (IOException | InterruptedException e) {
+                LOG.errorf("❌ Attempt %d/%d Error fetching Dashen receipt: %s", attempt, maxAttempts, e.getMessage());
+                lastException = e;
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
 
-            return parseDashenReceipt(response.body());
-
-        } catch (IOException | InterruptedException e) {
-            LOG.errorf("❌ Error fetching Dashen receipt: %s", e.getMessage());
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
+            if (attempt < maxAttempts) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
-            return DashenVerifyResult.failure("Error fetching receipt: " + e.getMessage());
         }
+
+        String errorMsg = lastException != null ? lastException.getMessage() : "Unknown error";
+        return DashenVerifyResult.failure("Error fetching receipt after " + maxAttempts + " attempts: " + errorMsg);
     }
 
     private DashenVerifyResult parseDashenReceipt(byte[] pdfData) {

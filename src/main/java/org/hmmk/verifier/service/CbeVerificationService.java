@@ -102,38 +102,64 @@ public class CbeVerificationService {
         String fullId = reference + accountSuffix;
         String url = cbeUrl + "?id=" + fullId;
 
-        try {
-            LOG.infof("🔎 Attempting direct fetch: %s", url);
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofMillis(timeout))
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                    .header("Accept", "application/pdf")
-                    .GET()
-                    .build();
+        int maxAttempts = 3;
+        Exception lastException = null;
 
-            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                LOG.infof("🔎 Attempt %d/%d CBE verification: %s", attempt, maxAttempts, url);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofMillis(timeout))
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                        .header("Accept", "application/pdf")
+                        .GET()
+                        .build();
 
-            if (response.statusCode() != 200) {
-                return CbeVerifyResult.failure("HTTP error: " + response.statusCode());
+                HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+                if (response.statusCode() == 200) {
+                    // Check if response is actually a PDF
+                    String contentType = response.headers().firstValue("Content-Type").orElse("");
+                    if (!contentType.contains("pdf") && response.body().length < 100) {
+                        LOG.warnf("⚠️ Attempt %d/%d: Response is not a PDF", attempt, maxAttempts);
+                        if (attempt == maxAttempts) {
+                            return CbeVerifyResult.failure("Response is not a PDF after " + maxAttempts + " attempts");
+                        }
+                    } else {
+                        LOG.info("✅ Direct fetch success, parsing PDF");
+                        return parseCBEReceipt(response.body());
+                    }
+                } else {
+                    LOG.errorf("❌ Attempt %d/%d CBE API returned HTTP error: %d", attempt, maxAttempts,
+                            response.statusCode());
+                    if (attempt == maxAttempts) {
+                        return CbeVerifyResult.failure(
+                                "HTTP error: " + response.statusCode() + " after " + maxAttempts + " attempts");
+                    }
+                }
+
+            } catch (IOException | InterruptedException e) {
+                LOG.errorf("❌ Attempt %d/%d Error fetching CBE receipt: %s", attempt, maxAttempts, e.getMessage());
+                lastException = e;
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
 
-            // Check if response is actually a PDF
-            String contentType = response.headers().firstValue("Content-Type").orElse("");
-            if (!contentType.contains("pdf") && response.body().length < 100) {
-                return CbeVerifyResult.failure("Response is not a PDF");
+            if (attempt < maxAttempts) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
-
-            LOG.info("✅ Direct fetch success, parsing PDF");
-            return parseCBEReceipt(response.body());
-
-        } catch (IOException | InterruptedException e) {
-            LOG.errorf("❌ Error fetching CBE receipt: %s", e.getMessage());
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            return CbeVerifyResult.failure("Error fetching receipt: " + e.getMessage());
         }
+
+        String errorMsg = lastException != null ? lastException.getMessage() : "Unknown error";
+        return CbeVerifyResult.failure("Error fetching receipt after " + maxAttempts + " attempts: " + errorMsg);
     }
 
     /**
