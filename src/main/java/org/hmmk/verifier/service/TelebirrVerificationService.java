@@ -52,7 +52,7 @@ public class TelebirrVerificationService {
      */
     public Optional<TelebirrReceipt> verifyTelebirr(String reference) {
         Optional<TelebirrReceipt> result = fetchFromPrimarySource(reference);
-        if (result.isPresent() && result.get().isValid()) {
+        if (result.isPresent()) {
             return result;
         }
         LOG.errorf("Telebirr verification failed for reference: %s", reference);
@@ -96,7 +96,8 @@ public class TelebirrVerificationService {
     }
 
     /**
-     * Scrapes Telebirr receipt data from HTML content using Jsoup and regex.
+     * Scrapes Telebirr receipt data from HTML content using Jsoup.
+     * Updated to match Telebirr's receipt HTML structure.
      */
     private TelebirrReceipt scrapeTelebirrReceipt(String html) {
         Document doc = Jsoup.parse(html);
@@ -106,12 +107,12 @@ public class TelebirrVerificationService {
             LOG.warnf("Suspiciously short HTML response: %s", html);
         }
 
-        String creditedPartyName = getTextWithFallback(doc, html, "የገንዘብ ተቀባይ ስም/Credited Party name");
-        String creditedPartyAccountNo = getTextWithFallback(doc, html, "የገንዘብ ተቀባይ ቴሌብር ቁ./Credited party account no");
+        String creditedPartyName = extractFieldValue(doc, "የገንዘብ ተቀባይ ስም/Credited Party name");
+        String creditedPartyAccountNo = extractFieldValue(doc, "የገንዘብ ተቀባይ ቴሌብር ቁ./Credited party account no");
         String bankName = "";
 
         // Handle bank account number case
-        String bankAccountNumberRaw = getTextWithFallback(doc, html, "የባንክ አካውንት ቁጥር/Bank account number");
+        String bankAccountNumberRaw = extractFieldValue(doc, "የባንክ አካውንት ቁጥር/Bank account number");
         if (bankAccountNumberRaw != null && !bankAccountNumberRaw.isEmpty()) {
             bankName = creditedPartyName; // The original credited party name is the bank
             Pattern bankAccountPattern = Pattern.compile("(\\d+)\\s+(.*)");
@@ -123,159 +124,149 @@ public class TelebirrVerificationService {
         }
 
         return TelebirrReceipt.builder()
-                .payerName(getTextWithFallback(doc, html, "የከፋይ ስም/Payer Name"))
-                .payerTelebirrNo(getTextWithFallback(doc, html, "የከፋይ ቴሌብር ቁ./Payer telebirr no."))
+                .payerName(extractFieldValue(doc, "የከፋይ ስም/Payer Name"))
+                .payerTelebirrNo(extractFieldValue(doc, "የከፋይ ቴሌብር ቁ./Payer telebirr no."))
                 .creditedPartyName(creditedPartyName)
                 .creditedPartyAccountNo(creditedPartyAccountNo)
-                .transactionStatus(getTextWithFallback(doc, html, "የክፍያው ሁኔታ/transaction status"))
-                .receiptNo(extractReceiptNo(html, doc))
-                .paymentDate(extractPaymentDate(html, doc))
-                .settledAmount(extractSettledAmount(html, doc))
-                .serviceFee(extractServiceFee(html, doc))
-                .serviceFeeVAT(getTextWithFallback(doc, html, "የአገልግሎት ክፍያ ተ.እ.ታ/Service fee VAT"))
-                .totalPaidAmount(getTextWithFallback(doc, html, "ጠቅላላ የተከፈለ/Total Paid Amount"))
+                .transactionStatus(extractTransactionStatus(doc))
+                .receiptNo(extractInvoiceDetailValue(doc, 0))
+                .paymentDate(extractInvoiceDetailValue(doc, 1))
+                .settledAmount(extractInvoiceDetailValue(doc, 2))
+                .serviceFee(extractServiceFee(doc))
+                .serviceFeeVAT(extractServiceFeeVAT(doc))
+                .totalPaidAmount(extractTotalPaidAmount(doc))
                 .bankName(bankName)
                 .build();
     }
 
     /**
-     * Extracts text using Jsoup with regex fallback.
+     * Extracts field value by finding a TD containing the label and getting the
+     * next sibling TD's text.
      */
-    private String getTextWithFallback(Document doc, String html, String labelText) {
-        // Try regex first
-        String regexResult = extractWithRegex(html, labelText);
-        if (regexResult != null && !regexResult.isEmpty()) {
-            return regexResult;
-        }
-
-        // Fallback to Jsoup
-        Element labelElement = doc.selectFirst("td:contains(" + labelText + ")");
-        if (labelElement != null) {
-            Element nextElement = labelElement.nextElementSibling();
-            if (nextElement != null) {
-                return nextElement.text().trim();
+    private String extractFieldValue(Document doc, String label) {
+        // Find TDs containing this label text
+        for (Element td : doc.select("td")) {
+            String text = td.text().trim();
+            if (text.contains(label) || text.equals(label)) {
+                Element nextTd = td.nextElementSibling();
+                if (nextTd != null && "td".equalsIgnoreCase(nextTd.tagName())) {
+                    return cleanText(nextTd.text());
+                }
             }
         }
         return "";
     }
 
     /**
-     * Generic regex extractor for fields.
+     * Extracts transaction status specifically, handling the unclosed TD tag issue
+     * in the HTML.
      */
-    private String extractWithRegex(String html, String labelPattern) {
-        String escapedLabel = Pattern.quote(labelPattern);
-        Pattern pattern = Pattern.compile(escapedLabel + ".*?</td>\\s*<td[^>]*>\\s*([^<]+)", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(html);
-        if (matcher.find()) {
-            return matcher.group(1).replaceAll("<[^>]*>", "").trim();
-        }
-        return null;
-    }
-
-    /**
-     * Extracts settled amount using multiple regex patterns.
-     */
-    private String extractSettledAmount(String html, Document doc) {
-        // Pattern 1: Direct match with the exact text structure
-        Pattern pattern1 = Pattern.compile(
-                "የተከፈለው\\s+መጠን/Settled\\s+Amount.*?</td>\\s*<td[^>]*>\\s*(\\d+(?:\\.\\d{2})?\\s+Birr)",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-        Matcher matcher = pattern1.matcher(html);
-        if (matcher.find())
-            return matcher.group(1).trim();
-
-        // Pattern 2: Look for the table row structure
-        Pattern pattern2 = Pattern.compile(
-                "<tr[^>]*>.*?የተከፈለው\\s+መጠን/Settled\\s+Amount.*?<td[^>]*>\\s*(\\d+(?:\\.\\d{2})?\\s+Birr)",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-        matcher = pattern2.matcher(html);
-        if (matcher.find())
-            return matcher.group(1).trim();
-
-        // Pattern 3: More flexible approach
-        Pattern pattern3 = Pattern.compile("Settled\\s+Amount.*?(\\d+(?:\\.\\d{2})?\\s+Birr)",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-        matcher = pattern3.matcher(html);
-        if (matcher.find())
-            return matcher.group(1).trim();
-
-        // Fallback to Jsoup
-        return doc.select("td.receipttableTd.receipttableTd2")
-                .stream()
-                .filter(el -> {
-                    Element prev = el.previousElementSibling();
-                    return prev != null
-                            && (prev.text().contains("የተከፈለው መጠን") || prev.text().contains("Settled Amount"));
-                })
-                .findFirst()
-                .map(Element::text)
-                .orElse("");
-    }
-
-    /**
-     * Extracts service fee using regex patterns.
-     */
-    private String extractServiceFee(String html, Document doc) {
-        // Pattern to match service fee but not VAT version
-        Pattern pattern = Pattern.compile(
-                "የአገልግሎት\\s+ክፍያ/Service\\s+fee(?!\\s+ተ\\.እ\\.ታ).*?</td>\\s*<td[^>]*>\\s*(\\d+(?:\\.\\d{2})?\\s+Birr)",
-                Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(html);
-        if (matcher.find())
-            return matcher.group(1).trim();
-
-        // Fallback to Jsoup
-        return doc.select("td.receipttableTd1")
-                .stream()
-                .filter(el -> {
-                    String text = el.text();
-                    return (text.contains("የአገልግሎት ክፍያ") || text.contains("Service fee"))
-                            && !text.contains("ተ.እ.ታ") && !text.contains("VAT");
-                })
-                .findFirst()
-                .map(el -> {
-                    Element next = el.nextElementSibling();
-                    return next != null ? next.text().trim() : "";
-                })
-                .orElse("");
-    }
-
-    /**
-     * Extracts receipt number using regex patterns.
-     */
-    private String extractReceiptNo(String html, Document doc) {
-        // Try regex first
-        Pattern pattern = Pattern.compile(
-                "<td[^>]*class=\"[^\"]*receipttableTd[^\"]*receipttableTd2[^\"]*\"[^>]*>\\s*([A-Z0-9]+)\\s*</td>",
-                Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(html);
-        if (matcher.find())
-            return matcher.group(1).trim();
-
-        // Fallback to Jsoup
-        var cells = doc.select("td.receipttableTd.receipttableTd2");
-        if (cells.size() > 1) {
-            return cells.get(1).text().trim();
+    private String extractTransactionStatus(Document doc) {
+        for (Element td : doc.select("td")) {
+            if (td.text().contains("የክፍያው ሁኔታ/transaction status")) {
+                Element nextTd = td.nextElementSibling();
+                if (nextTd != null) {
+                    return cleanText(nextTd.text());
+                }
+            }
         }
         return "";
     }
 
     /**
-     * Extracts payment date using regex patterns.
+     * Extracts values from the invoice details table row.
+     * The table has 3 columns: Invoice No, Payment date, Settled Amount
+     * index 0 = Invoice No, 1 = Payment date, 2 = Settled Amount
      */
-    private String extractPaymentDate(String html, Document doc) {
-        // Try regex first - format DD-MM-YYYY HH:MM:SS
-        Pattern pattern = Pattern.compile("(\\d{2}-\\d{2}-\\d{4}\\s+\\d{2}:\\d{2}:\\d{2})");
-        Matcher matcher = pattern.matcher(html);
-        if (matcher.find())
-            return matcher.group(1).trim();
+    private String extractInvoiceDetailValue(Document doc, int index) {
+        // Find the invoice details data row (row after header row with Invoice
+        // No./Payment date/Settled Amount)
+        for (Element tr : doc.select("tr")) {
+            var tds = tr.select("td.receipttableTd.receipttableTd2, td.receipttableTd");
+            if (tds.size() >= 3) {
+                // Check if any TD contains the header text - skip header row
+                boolean isHeader = tds.stream().anyMatch(td -> td.text().contains("የክፍያ ቁጥር/Invoice No") ||
+                        td.text().contains("የክፍያ ቀን/Payment date") ||
+                        td.text().contains("የተከፈለው መጠን/Settled Amount"));
 
-        // Fallback to Jsoup
-        return doc.select(".receipttableTd")
-                .stream()
-                .filter(el -> el.text().contains("-202"))
-                .findFirst()
-                .map(Element::text)
-                .orElse("");
+                if (!isHeader) {
+                    // This is a data row
+                    if (index < tds.size()) {
+                        return cleanText(tds.get(index).text());
+                    }
+                    break;
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Extracts service fee from the invoice table.
+     */
+    private String extractServiceFee(Document doc) {
+        for (Element td : doc.select("td.receipttableTd1")) {
+            String text = td.text();
+            if ((text.contains("የአገልግሎት ክፍያ/Service fee") || text.contains("Service fee"))
+                    && !text.contains("VAT") && !text.contains("ተ.እ.ታ")) {
+                Element next = td.nextElementSibling();
+                if (next != null) {
+                    return cleanText(next.text());
+                }
+            }
+        }
+        // Also try colspan rows
+        for (Element td : doc.select("td[colspan]")) {
+            String text = td.text();
+            if ((text.contains("የአገልግሎት ክፍያ/Service fee") || text.contains("Service fee"))
+                    && !text.contains("VAT") && !text.contains("ተ.እ.ታ")) {
+                Element next = td.nextElementSibling();
+                if (next != null) {
+                    return cleanText(next.text());
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Extracts service fee VAT.
+     */
+    private String extractServiceFeeVAT(Document doc) {
+        for (Element td : doc.select("td.receipttableTd1")) {
+            String text = td.text();
+            if (text.contains("Service fee VAT") || text.contains("የአገልግሎት ክፍያ ተ.እ.ታ")) {
+                Element next = td.nextElementSibling();
+                if (next != null) {
+                    return cleanText(next.text());
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Extracts total paid amount.
+     */
+    private String extractTotalPaidAmount(Document doc) {
+        for (Element td : doc.select("td.receipttableTd1")) {
+            String text = td.text();
+            if (text.contains("ጠቅላላ የተከፈለ/Total Paid Amount") || text.contains("Total Paid Amount")) {
+                Element next = td.nextElementSibling();
+                if (next != null) {
+                    return cleanText(next.text());
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Cleans extracted text by removing extra whitespace.
+     */
+    private String cleanText(String text) {
+        if (text == null)
+            return "";
+        return text.replaceAll("\\s+", " ").trim();
     }
 }

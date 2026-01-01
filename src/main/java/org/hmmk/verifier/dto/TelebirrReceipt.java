@@ -28,16 +28,4 @@ public class TelebirrReceipt {
     private String serviceFeeVAT;
     private String totalPaidAmount;
     private String bankName;
-
-    /**
-     * Validates that essential fields have values.
-     *
-     * @return true if the receipt has the minimum required fields
-     */
-    public boolean isValid() {
-        return  true;
-//        return receiptNo != null && !receiptNo.isEmpty()
-//                && payerName != null && !payerName.isEmpty()
-//                && transactionStatus != null && !transactionStatus.isEmpty();
-    }
 }
