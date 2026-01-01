@@ -37,6 +37,30 @@ public class UnifiedVerificationService {
     @ConfigProperty(name = "verifier.callback.url", defaultValue = "http://localhost:8080/api/callback")
     String callbackUrl;
 
+    @ConfigProperty(name = "verifier.telebirr.receiver-account", defaultValue = "")
+    String telebirrReceiverAccount;
+
+    @ConfigProperty(name = "verifier.telebirr.receiver-name", defaultValue = "")
+    String telebirrReceiverName;
+
+    @ConfigProperty(name = "verifier.cbe.receiver-account", defaultValue = "")
+    String cbeReceiverAccount;
+
+    @ConfigProperty(name = "verifier.cbe.receiver-name", defaultValue = "")
+    String cbeReceiverName;
+
+    @ConfigProperty(name = "verifier.abyssinia.receiver-account", defaultValue = "")
+    String abyssiniaReceiverAccount;
+
+    @ConfigProperty(name = "verifier.abyssinia.receiver-name", defaultValue = "")
+    String abyssiniaReceiverName;
+
+    @ConfigProperty(name = "verifier.dashen.receiver-account", defaultValue = "")
+    String dashenReceiverAccount;
+
+    @ConfigProperty(name = "verifier.dashen.receiver-name", defaultValue = "")
+    String dashenReceiverName;
+
     private final HttpClient httpClient;
 
     public UnifiedVerificationService() {
@@ -59,6 +83,13 @@ public class UnifiedVerificationService {
         // 2. Call required service based on Bank Type
         VerificationOutcome outcome = callBankService(request);
         if (!outcome.isSuccess()) {
+            return UnifiedVerifyResult.failure(outcome.getError());
+        }
+
+        // 2.1 Validate receiver details
+        outcome = validateReceiver(request.getBankType(), outcome);
+        if (!outcome.isSuccess()) {
+            LOG.warnf("Receiver validation failed for %s: %s", request.getReference(), outcome.getError());
             return UnifiedVerifyResult.failure(outcome.getError());
         }
 
@@ -132,6 +163,47 @@ public class UnifiedVerificationService {
         payment.persist();
     }
 
+    private VerificationOutcome validateReceiver(String bankType, VerificationOutcome outcome) {
+        String expectedAccount = "";
+        String expectedName = "";
+
+        switch (bankType.toUpperCase()) {
+            case "TELEBIRR":
+                expectedAccount = telebirrReceiverAccount;
+                expectedName = telebirrReceiverName;
+                break;
+            case "CBE":
+                expectedAccount = cbeReceiverAccount;
+                expectedName = cbeReceiverName;
+                break;
+            case "ABYSSINIA":
+                expectedAccount = abyssiniaReceiverAccount;
+                expectedName = abyssiniaReceiverName;
+                break;
+            case "DASHEN":
+                expectedAccount = dashenReceiverAccount;
+                expectedName = dashenReceiverName;
+                break;
+        }
+
+        if (expectedAccount != null && !expectedAccount.isBlank() && outcome.getReceiverAccount() != null
+                && !outcome.getReceiverAccount().contains(expectedAccount)
+                && !expectedAccount.contains(outcome.getReceiverAccount())) {
+            return VerificationOutcome.error("Receiver account mismatch");
+        }
+
+        if (expectedName != null && !expectedName.isBlank() && outcome.getReceiverName() != null
+                && !outcome.getReceiverName().equalsIgnoreCase(expectedName)) {
+            // Check if one contains the other for better matching
+            if (!outcome.getReceiverName().toLowerCase().contains(expectedName.toLowerCase()) &&
+                    !expectedName.toLowerCase().contains(outcome.getReceiverName().toLowerCase())) {
+                return VerificationOutcome.error("Receiver name mismatch");
+            }
+        }
+
+        return outcome;
+    }
+
     /**
      * Internal wrapper for bank service response.
      */
@@ -140,20 +212,24 @@ public class UnifiedVerificationService {
         private final String error;
         private final BigDecimal amount;
         private final String payerName;
+        private final String receiverAccount;
+        private final String receiverName;
         private final LocalDateTime transactionDate;
 
         private VerificationOutcome(boolean success, String error, BigDecimal amount, String payerName,
-                LocalDateTime transactionDate) {
+                String receiverAccount, String receiverName, LocalDateTime transactionDate) {
             this.success = success;
             this.error = error;
             this.amount = amount;
             this.payerName = payerName;
+            this.receiverAccount = receiverAccount;
+            this.receiverName = receiverName;
             this.transactionDate = transactionDate;
         }
 
         public static VerificationOutcome from(CbeVerifyResult res) {
             return new VerificationOutcome(res.isSuccess(), res.getError(), res.getAmount(), res.getPayer(),
-                    res.getDate());
+                    res.getReceiverAccount(), res.getReceiver(), res.getDate());
         }
 
         public static VerificationOutcome from(Optional<TelebirrReceipt> res) {
@@ -165,21 +241,22 @@ public class UnifiedVerificationService {
                 amount = new BigDecimal(r.getSettledAmount().replaceAll("[^\\d.]", ""));
             } catch (Exception e) {
             }
-            return new VerificationOutcome(true, null, amount, r.getPayerName(), null);
+            return new VerificationOutcome(true, null, amount, r.getPayerName(),
+                    r.getCreditedPartyAccountNo(), r.getCreditedPartyName(), null);
         }
 
         public static VerificationOutcome from(AbyssiniaVerifyResult res) {
             return new VerificationOutcome(res.isSuccess(), res.getError(), res.getAmount(), res.getPayer(),
-                    res.getDate());
+                    res.getReceiverAccount(), res.getReceiverName(), res.getDate());
         }
 
         public static VerificationOutcome from(DashenVerifyResult res) {
             return new VerificationOutcome(res.isSuccess(), res.getError(), res.getTransactionAmount(),
-                    res.getSenderName(), res.getTransactionDate());
+                    res.getSenderName(), null, res.getReceiverName(), res.getTransactionDate());
         }
 
         public static VerificationOutcome error(String message) {
-            return new VerificationOutcome(false, message, null, null, null);
+            return new VerificationOutcome(false, message, null, null, null, null, null);
         }
 
         public boolean isSuccess() {
@@ -196,6 +273,14 @@ public class UnifiedVerificationService {
 
         public String getPayerName() {
             return payerName;
+        }
+
+        public String getReceiverAccount() {
+            return receiverAccount;
+        }
+
+        public String getReceiverName() {
+            return receiverName;
         }
 
         public LocalDateTime getTransactionDate() {
