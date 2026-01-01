@@ -34,7 +34,7 @@ public class UnifiedVerificationService {
     @Inject
     DashenVerificationService dashenService;
 
-    @ConfigProperty(name = "verifier.callback.url", defaultValue = "http://localhost:8080/api/callback")
+    @ConfigProperty(name = "verifier.callback.url", defaultValue = "https://n8n.memby.online/webhook/59dca007-f8ff-4321-99ae-62d545e8bef6")
     String callbackUrl;
 
     @ConfigProperty(name = "verifier.telebirr.receiver-account", defaultValue = "")
