@@ -2,7 +2,7 @@ name: Deploy Quarkus API
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
     paths:
       - "src/**"
       - "pom.xml"
