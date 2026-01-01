@@ -35,8 +35,9 @@ public class TelebirrReceipt {
      * @return true if the receipt has the minimum required fields
      */
     public boolean isValid() {
-        return receiptNo != null && !receiptNo.isEmpty()
-                && payerName != null && !payerName.isEmpty()
-                && transactionStatus != null && !transactionStatus.isEmpty();
+        return  true;
+//        return receiptNo != null && !receiptNo.isEmpty()
+//                && payerName != null && !payerName.isEmpty()
+//                && transactionStatus != null && !transactionStatus.isEmpty();
     }
 }

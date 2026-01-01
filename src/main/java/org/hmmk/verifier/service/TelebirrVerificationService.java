@@ -31,20 +31,14 @@ public class TelebirrVerificationService {
     @ConfigProperty(name = "verifier.telebirr.primary-url", defaultValue = "https://transactioninfo.ethiotelecom.et/receipt/")
     String primaryUrl;
 
-    @ConfigProperty(name = "verifier.telebirr.fallback-url", defaultValue = "https://leul.et/verify.php?reference=")
-    String fallbackUrl;
-
-    @ConfigProperty(name = "verifier.telebirr.skip-primary", defaultValue = "false")
-    boolean skipPrimary;
-
-    @ConfigProperty(name = "verifier.telebirr.timeout", defaultValue = "1500000")
+    @ConfigProperty(name = "verifier.telebirr.timeout", defaultValue = "30000")
     int timeout;
 
     private final HttpClient httpClient;
 
     public TelebirrVerificationService() {
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
+                .connectTimeout(Duration.ofSeconds(30))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
     }
@@ -57,23 +51,11 @@ public class TelebirrVerificationService {
      *         otherwise
      */
     public Optional<TelebirrReceipt> verifyTelebirr(String reference) {
-        if (!skipPrimary) {
-            Optional<TelebirrReceipt> primaryResult = fetchFromPrimarySource(reference);
-            if (primaryResult.isPresent() && primaryResult.get().isValid()) {
-                return primaryResult;
-            }
-            LOG.warnf("Primary Telebirr verification failed for reference: %s. Trying fallback proxy...", reference);
-        } else {
-            LOG.info("Skipping primary verifier due to verifier.telebirr.skip-primary=true");
+        Optional<TelebirrReceipt> result = fetchFromPrimarySource(reference);
+        if (result.isPresent() && result.get().isValid()) {
+            return result;
         }
-
-        Optional<TelebirrReceipt> fallbackResult = fetchFromProxySource(reference);
-        if (fallbackResult.isPresent() && fallbackResult.get().isValid()) {
-            LOG.infof("Successfully verified Telebirr receipt using fallback proxy for reference: %s", reference);
-            return fallbackResult;
-        }
-
-        LOG.errorf("Both primary and fallback Telebirr verification failed for reference: %s", reference);
+        LOG.errorf("Telebirr verification failed for reference: %s", reference);
         return Optional.empty();
     }
 
@@ -106,44 +88,6 @@ public class TelebirrVerificationService {
 
         } catch (IOException | InterruptedException e) {
             LOG.errorf("Error fetching Telebirr receipt from primary source %s: %s", url, e.getMessage());
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Fetches receipt from the fallback proxy source.
-     */
-    private Optional<TelebirrReceipt> fetchFromProxySource(String reference) {
-        String url = fallbackUrl + reference;
-
-        try {
-            LOG.infof("Attempting to fetch Telebirr receipt from proxy: %s", url);
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofMillis(timeout))
-                    .header("Accept", "application/json")
-                    .header("User-Agent", "VerifierAPI/1.0")
-                    .GET()
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            LOG.debugf("Received proxy response with status: %d", response.statusCode());
-
-            if (response.statusCode() != 200) {
-                LOG.warnf("Proxy source returned non-200 status: %d", response.statusCode());
-                return Optional.empty();
-            }
-
-            // The proxy might return JSON or HTML, try to scrape as HTML
-            TelebirrReceipt receipt = scrapeTelebirrReceipt(response.body());
-            LOG.infof("Successfully extracted Telebirr data from proxy for reference: %s", reference);
-            return Optional.of(receipt);
-
-        } catch (IOException | InterruptedException e) {
-            LOG.errorf("Error fetching Telebirr receipt from proxy %s: %s", url, e.getMessage());
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
