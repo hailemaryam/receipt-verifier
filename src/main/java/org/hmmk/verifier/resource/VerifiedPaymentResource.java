@@ -9,13 +9,12 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
-import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.hmmk.verifier.model.VerifiedPayment;
 
-import java.time.LocalDateTime;
+import org.hmmk.verifier.dto.VerifiedPaymentFilter;
 import java.util.List;
 import java.util.StringJoiner;
 
@@ -32,52 +31,42 @@ public class VerifiedPaymentResource {
      * Lists verified payments with filters for senderId, bankType, and transaction
      * date range.
      *
-     * @param senderId Optional sender ID filter
-     * @param bankType Optional bank type filter
-     * @param fromDate Optional start date for transaction date range
-     * @param toDate   Optional end date for transaction date range
-     * @param page     Page number (0-indexed)
-     * @param pageSize Number of records per page
+     * @param filter Filter criteria for verified payments
      * @return List of verified payments
      */
-    @GET
+    @POST
+    @Path("/list")
     @Operation(summary = "List Verified Payments", description = "Returns a paginated list of verified payments with optional filters")
     @APIResponses({
             @APIResponse(responseCode = "200", description = "Successfully retrieved list", content = @Content(mediaType = "application/json", schema = @Schema(type = SchemaType.ARRAY, implementation = VerifiedPayment.class)))
     })
-    public List<VerifiedPayment> list(
-            @Parameter(description = "Filter by sender ID") @QueryParam("senderId") String senderId,
-            @Parameter(description = "Filter by bank type") @QueryParam("bankType") String bankType,
-            @Parameter(description = "Start of transaction date range (ISO-8601)") @QueryParam("fromDate") LocalDateTime fromDate,
-            @Parameter(description = "End of transaction date range (ISO-8601)") @QueryParam("toDate") LocalDateTime toDate,
-            @DefaultValue("0") @QueryParam("page") int page,
-            @DefaultValue("20") @QueryParam("pageSize") int pageSize) {
+    public List<VerifiedPayment> list(VerifiedPaymentFilter filter) {
 
         StringBuilder query = new StringBuilder("1=1");
         Parameters params = new Parameters();
 
-        if (senderId != null && !senderId.isBlank()) {
+        if (filter.getSenderId() != null && !filter.getSenderId().isBlank()) {
             query.append(" and senderId = :senderId");
-            params.and("senderId", senderId.trim());
+            params.and("senderId", filter.getSenderId().trim());
         }
 
-        if (bankType != null && !bankType.isBlank()) {
+        if (filter.getBankType() != null && !filter.getBankType().isBlank()) {
             query.append(" and bankType = :bankType");
-            params.and("bankType", bankType.trim());
+            params.and("bankType", filter.getBankType().trim());
         }
 
-        if (fromDate != null) {
+        if (filter.getFromDate() != null) {
             query.append(" and transactionDate >= :fromDate");
-            params.and("fromDate", fromDate);
+            params.and("fromDate", filter.getFromDate());
         }
 
-        if (toDate != null) {
+        if (filter.getToDate() != null) {
             query.append(" and transactionDate <= :toDate");
-            params.and("toDate", toDate);
+            params.and("toDate", filter.getToDate());
         }
 
         return VerifiedPayment.find(query.toString(), params)
-                .page(Page.of(page, pageSize))
+                .page(Page.of(filter.getPage(), filter.getPageSize()))
                 .list();
     }
 
