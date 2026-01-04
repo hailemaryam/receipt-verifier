@@ -17,4 +17,5 @@ public class UnifiedVerifyRequest {
     private String reference;
     private String suffix;
     private String senderId;
+    private String merchantReferenceId;
 }

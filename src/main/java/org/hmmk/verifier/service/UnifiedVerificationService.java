@@ -95,7 +95,7 @@ public class UnifiedVerificationService {
 
         // 3. Call callback request to other system
         boolean callbackSuccess = sendCallback(request.getSenderId(), request.getReference(), request.getBankType(),
-                outcome.getAmount());
+                outcome.getAmount(), request.getMerchantReferenceId());
 
         if (callbackSuccess) {
             // 4. Store the senderId along with other payment info to the database
@@ -127,12 +127,14 @@ public class UnifiedVerificationService {
         }
     }
 
-    private boolean sendCallback(String senderId, String reference, String bankType, BigDecimal amount) {
+    private boolean sendCallback(String senderId, String reference, String bankType, BigDecimal amount,
+            String merchantReferenceId) {
         try {
             LOG.infof("Sending callback to %s", callbackUrl);
             String jsonBody = String.format(
-                    "{\"senderId\":\"%s\", \"reference\":\"%s\", \"bankType\":\"%s\", \"amount\":%s}",
-                    senderId, reference, bankType, amount != null ? amount.toString() : "0");
+                    "{\"senderId\":\"%s\", \"reference\":\"%s\", \"bankType\":\"%s\", \"amount\":%s, \"merchantReferenceId\":\"%s\"}",
+                    senderId, reference, bankType, amount != null ? amount.toString() : "0",
+                    merchantReferenceId != null ? merchantReferenceId : "");
 
             HttpRequest callbackReq = HttpRequest.newBuilder()
                     .uri(URI.create(callbackUrl))
@@ -158,6 +160,7 @@ public class UnifiedVerificationService {
                 .amount(outcome.getAmount())
                 .payerName(outcome.getPayerName())
                 .transactionDate(outcome.getTransactionDate())
+                .merchantReferenceId(request.getMerchantReferenceId())
                 .verifiedAt(LocalDateTime.now())
                 .build();
         payment.persist();

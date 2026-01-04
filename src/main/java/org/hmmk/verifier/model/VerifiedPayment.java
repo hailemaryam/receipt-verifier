@@ -38,6 +38,8 @@ public class VerifiedPayment extends PanacheEntity {
 
     public String rawData; // Store the full JSON or summary from the bank service
 
+    public String merchantReferenceId;
+
     public LocalDateTime verifiedAt;
 
     /**

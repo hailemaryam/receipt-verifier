@@ -19,4 +19,5 @@ public class ExternalCallbackRequest {
     private String reference;
     private String bankType;
     private BigDecimal amount;
+    private String merchantReferenceId;
 }
