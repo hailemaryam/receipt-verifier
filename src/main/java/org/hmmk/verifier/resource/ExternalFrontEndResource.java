@@ -97,7 +97,7 @@ public class ExternalFrontEndResource {
                                         .build();
                 }
 
-                List<String> bankTypes = ReceiverAccount.findUniqueBankTypes();
+                List<String> bankTypes = List.of("Telebirr", "CBE", "Abyssinia"); // Example bank types
                 java.util.List<ReceiverAccount> result = new java.util.ArrayList<>();
                 for (String bankType : bankTypes) {
                         ReceiverAccount next = ReceiverAccount.getNextAccount(bankType);
