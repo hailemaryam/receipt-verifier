@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @ApplicationScoped
@@ -36,30 +37,6 @@ public class UnifiedVerificationService {
 
     @ConfigProperty(name = "verifier.callback.url", defaultValue = "https://n8n.memby.online/webhook/59dca007-f8ff-4321-99ae-62d545e8bef6")
     String callbackUrl;
-
-    @ConfigProperty(name = "verifier.telebirr.receiver-account", defaultValue = "")
-    String telebirrReceiverAccount;
-
-    @ConfigProperty(name = "verifier.telebirr.receiver-name", defaultValue = "")
-    String telebirrReceiverName;
-
-    @ConfigProperty(name = "verifier.cbe.receiver-account", defaultValue = "")
-    String cbeReceiverAccount;
-
-    @ConfigProperty(name = "verifier.cbe.receiver-name", defaultValue = "")
-    String cbeReceiverName;
-
-    @ConfigProperty(name = "verifier.abyssinia.receiver-account", defaultValue = "")
-    String abyssiniaReceiverAccount;
-
-    @ConfigProperty(name = "verifier.abyssinia.receiver-name", defaultValue = "")
-    String abyssiniaReceiverName;
-
-    @ConfigProperty(name = "verifier.dashen.receiver-account", defaultValue = "")
-    String dashenReceiverAccount;
-
-    @ConfigProperty(name = "verifier.dashen.receiver-name", defaultValue = "")
-    String dashenReceiverName;
 
     private final HttpClient httpClient;
 
@@ -167,41 +144,33 @@ public class UnifiedVerificationService {
     }
 
     private VerificationOutcome validateReceiver(String bankType, VerificationOutcome outcome) {
-        String expectedAccount = "";
-        String expectedName = "";
+        List<org.hmmk.verifier.model.ReceiverAccount> allowedAccounts = org.hmmk.verifier.model.ReceiverAccount
+                .findByBankType(bankType);
 
-        switch (bankType.toUpperCase()) {
-            case "TELEBIRR":
-                expectedAccount = telebirrReceiverAccount;
-                expectedName = telebirrReceiverName;
-                break;
-            case "CBE":
-                expectedAccount = cbeReceiverAccount;
-                expectedName = cbeReceiverName;
-                break;
-            case "ABYSSINIA":
-                expectedAccount = abyssiniaReceiverAccount;
-                expectedName = abyssiniaReceiverName;
-                break;
-            case "DASHEN":
-                expectedAccount = dashenReceiverAccount;
-                expectedName = dashenReceiverName;
-                break;
+        if (allowedAccounts.isEmpty()) {
+            LOG.warnf("No receiver accounts configured in database for bank: %s. Skipping validation.", bankType);
+            return outcome;
         }
 
-        if (expectedAccount != null && !expectedAccount.isBlank() && outcome.getReceiverAccount() != null
-                && !outcome.getReceiverAccount().contains(expectedAccount)
-                && !expectedAccount.contains(outcome.getReceiverAccount())) {
-            return VerificationOutcome.error("Receiver account mismatch");
-        }
+        String receivedAccount = outcome.getReceiverAccount();
+        String receivedName = outcome.getReceiverName();
 
-        if (expectedName != null && !expectedName.isBlank() && outcome.getReceiverName() != null
-                && !outcome.getReceiverName().equalsIgnoreCase(expectedName)) {
-            // Check if one contains the other for better matching
-            if (!outcome.getReceiverName().toLowerCase().contains(expectedName.toLowerCase()) &&
-                    !expectedName.toLowerCase().contains(outcome.getReceiverName().toLowerCase())) {
-                return VerificationOutcome.error("Receiver name mismatch");
+        boolean matchFound = allowedAccounts.stream().anyMatch(acc -> {
+            boolean accountMatch = false;
+            if (acc.accountNumber != null && !acc.accountNumber.isBlank() && receivedAccount != null) {
+                accountMatch = receivedAccount.equalsIgnoreCase(acc.accountNumber);
             }
+
+            boolean nameMatch = false;
+            if (acc.accountName != null && !acc.accountName.isBlank() && receivedName != null) {
+                nameMatch = receivedName.equalsIgnoreCase(acc.accountName);
+            }
+            return accountMatch && nameMatch;
+        });
+
+        if (!matchFound) {
+            return VerificationOutcome
+                    .error("Receiver details mismatch against all configured accounts for " + bankType);
         }
 
         return outcome;
