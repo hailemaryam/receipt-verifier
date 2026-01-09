@@ -29,6 +29,8 @@ public class ReceiverAccount extends PanacheEntity {
     @Column(nullable = false)
     public String accountName;
 
+    public java.time.LocalDateTime lastUsedAt;
+
     /**
      * Finds all receiver accounts for a specific bank type.
      *
@@ -37,5 +39,33 @@ public class ReceiverAccount extends PanacheEntity {
      */
     public static List<ReceiverAccount> findByBankType(String bankType) {
         return list("UPPER(bankType) = UPPER(?1)", bankType);
+    }
+
+    /**
+     * Finds all unique bank types.
+     *
+     * @return List of bank types
+     */
+    public static List<String> findUniqueBankTypes() {
+        return find("SELECT DISTINCT r.bankType FROM ReceiverAccount r").project(String.class).list();
+    }
+
+    /**
+     * Gets the next account for a bank type based on the oldest lastUsedAt.
+     *
+     * @param bankType The bank type
+     * @return The next ReceiverAccount or null if none found
+     */
+    public static ReceiverAccount getNextAccount(String bankType) {
+        List<ReceiverAccount> accounts = find("UPPER(bankType) = UPPER(?1) ORDER BY lastUsedAt ASC NULLS FIRST",
+                bankType)
+                .range(0, 0)
+                .list();
+        if (accounts.isEmpty()) {
+            return null;
+        }
+        ReceiverAccount next = accounts.get(0);
+        next.lastUsedAt = java.time.LocalDateTime.now();
+        return next;
     }
 }
