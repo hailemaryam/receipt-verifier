@@ -66,6 +66,7 @@ public class ReceiverAccount extends PanacheEntity {
         }
         ReceiverAccount next = accounts.get(0);
         next.lastUsedAt = java.time.LocalDateTime.now();
+        next.persist();
         return next;
     }
 }
