@@ -180,10 +180,7 @@ public class UnifiedVerificationService {
         String receivedName = outcome.getReceiverName();
 
         boolean matchFound = allowedAccounts.stream().anyMatch(acc -> {
-            boolean accountMatch = false;
-            if (acc.accountNumber != null && !acc.accountNumber.isBlank() && receivedAccount != null) {
-                accountMatch = receivedAccount.equalsIgnoreCase(acc.accountNumber);
-            }
+            boolean accountMatch = matchesAccount(bankType, acc.accountNumber, receivedAccount);
 
             boolean nameMatch = false;
             if (acc.accountName != null && !acc.accountName.isBlank() && receivedName != null) {
@@ -198,6 +195,44 @@ public class UnifiedVerificationService {
         }
 
         return outcome;
+    }
+
+    private boolean matchesAccount(String bankType, String stored, String received) {
+        if (stored == null || received == null || stored.isBlank() || received.isBlank()) {
+            return false;
+        }
+
+        // Direct match
+        if (stored.equalsIgnoreCase(received)) {
+            return true;
+        }
+
+        String type = bankType.toUpperCase();
+        switch (type) {
+            case "TELEBIRR":
+                // stored: 251923231698 -> received: 2519****1698 (4-4-4 pattern)
+                if (stored.length() >= 8) {
+                    return received.startsWith(stored.substring(0, 4)) &&
+                            received.endsWith(stored.substring(stored.length() - 4));
+                }
+                break;
+            case "CBE":
+                // stored: 1000352945017 -> received: 1****5017 (First 1, last 4)
+                if (stored.length() >= 5) {
+                    return received.startsWith(stored.substring(0, 1)) &&
+                            received.endsWith(stored.substring(stored.length() - 4));
+                }
+                break;
+            case "ABYSSINIA":
+            case "ABISSINIA": // Handling potential typo in user request
+                // stored: 111448396 -> received: 1******96 (First 1, last 2)
+                if (stored.length() >= 3) {
+                    return received.startsWith(stored.substring(0, 1)) &&
+                            received.endsWith(stored.substring(stored.length() - 2));
+                }
+                break;
+        }
+        return false;
     }
 
     /**
