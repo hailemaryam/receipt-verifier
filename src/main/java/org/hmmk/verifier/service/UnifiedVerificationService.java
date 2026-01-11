@@ -161,6 +161,9 @@ public class UnifiedVerificationService {
                 .amount(outcome.getAmount())
                 .payerName(outcome.getPayerName())
                 .transactionDate(outcome.getTransactionDate())
+                .receiverAccount(outcome.getReceiverAccount())
+                .receiverName(outcome.getReceiverName())
+                .merchantReference(request.getMerchantReferenceId())
                 .merchantReferenceId(request.getMerchantReferenceId())
                 .verifiedAt(LocalDateTime.now())
                 .build();

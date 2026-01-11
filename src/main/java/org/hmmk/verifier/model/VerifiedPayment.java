@@ -40,6 +40,12 @@ public class VerifiedPayment extends PanacheEntity {
 
     public String merchantReferenceId;
 
+    public String receiverAccount;
+
+    public String receiverName;
+
+    public String merchantReference;
+
     public LocalDateTime verifiedAt;
 
     /**
