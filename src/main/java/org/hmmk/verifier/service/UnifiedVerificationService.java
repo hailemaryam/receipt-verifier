@@ -18,6 +18,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -271,12 +272,18 @@ public class UnifiedVerificationService {
                 return error("Telebirr receipt not found");
             var r = res.get();
             BigDecimal amount = null;
+            LocalDateTime transactionDate = null;
             try {
                 amount = new BigDecimal(r.getSettledAmount().replaceAll("[^\\d.]", ""));
             } catch (Exception e) {
             }
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
+                transactionDate = LocalDateTime.parse(r.getPaymentDate(), formatter);
+            } catch (Exception e) {
+            }
             return new VerificationOutcome(true, null, amount, r.getPayerName(),
-                    r.getCreditedPartyAccountNo(), r.getCreditedPartyName(), null);
+                    r.getCreditedPartyAccountNo(), r.getCreditedPartyName(), transactionDate);
         }
 
         public static VerificationOutcome from(AbyssiniaVerifyResult res) {
