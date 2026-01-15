@@ -122,7 +122,7 @@ public class UnifiedVerificationService {
                     merchantReferenceId != null ? merchantReferenceId : "");
 
             // Hash string: {reference}{secret}{senderId}{amount}
-            String hashString = String.format("%s%s%s%s", reference, callbackSecret, senderId, amountStr);
+            String hashString = String.format("%s%s%s%s", reference, callbackSecret, senderId, merchantReferenceId);
             String signature = encryptSignature(hashString);
 
             HttpRequest callbackReq = HttpRequest.newBuilder()
