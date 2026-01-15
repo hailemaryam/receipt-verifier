@@ -121,7 +121,7 @@ public class UnifiedVerificationService {
                     senderId, reference, bankType, amountStr,
                     merchantReferenceId != null ? merchantReferenceId : "");
 
-            // Hash string: {reference}{secret}{senderId}{amount}
+            // Hash string: {reference}{secret}{senderId}{merchantReferenceId}
             String hashString = String.format("%s%s%s%s", reference, callbackSecret, senderId, merchantReferenceId);
             String signature = encryptSignature(hashString);
 
