@@ -108,4 +108,33 @@ public class ExternalFrontEndResource {
 
                 return Response.ok(result).build();
         }
+
+        /**
+         * Returns a list of failed verification attempts, latest first.
+         */
+        @GET
+        @Path("/failed")
+        @Operation(summary = "Get Failed Verification Attempts", description = "Returns a list of failed verification attempts, ordered by latest first")
+        @APIResponses({
+                        @APIResponse(responseCode = "200", description = "Failed attempts retrieved successfully", content = @Content(schema = @Schema(implementation = org.hmmk.verifier.model.FailedVerification.class))),
+                        @APIResponse(responseCode = "401", description = "Invalid or missing API-Key")
+        })
+        @Parameter(name = "API-Key", description = "Required API Key for authentication", required = true, in = ParameterIn.HEADER, schema = @Schema(type = SchemaType.STRING))
+        public Response getFailedAttempts(
+                        @HeaderParam("API-Key") String apiKeyHeader,
+                        @QueryParam("page") @DefaultValue("0") int page,
+                        @QueryParam("size") @DefaultValue("20") int size) {
+                if (apiKeyHeader == null || !apiKeyHeader.equals(apiKey)) {
+                        return Response.status(Response.Status.UNAUTHORIZED)
+                                        .entity(new ErrorResponse("Invalid or missing API-Key"))
+                                        .build();
+                }
+
+                List<org.hmmk.verifier.model.FailedVerification> list = org.hmmk.verifier.model.FailedVerification
+                                .find("order by failedAt desc")
+                                .page(page, size)
+                                .list();
+
+                return Response.ok(list).build();
+        }
 }
