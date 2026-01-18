@@ -62,12 +62,14 @@ public class UnifiedVerificationService {
         // 1. Check if reference already exists
         if (VerifiedPayment.exists(request.getBankType(), request.getReference())) {
             LOG.warnf("Reference %s already verified for bank %s", request.getReference(), request.getBankType());
+            saveFailure(request, "Reference already processed");
             return UnifiedVerifyResult.failure("Reference already processed");
         }
 
         // 2. Call required service based on Bank Type
         VerificationOutcome outcome = callBankService(request);
         if (!outcome.isSuccess()) {
+            saveFailure(request, outcome.getError());
             return UnifiedVerifyResult.failure(outcome.getError());
         }
 
@@ -75,6 +77,7 @@ public class UnifiedVerificationService {
         outcome = validateReceiver(request.getBankType(), outcome);
         if (!outcome.isSuccess()) {
             LOG.warnf("Receiver validation failed for %s: %s", request.getReference(), outcome.getError());
+            saveFailure(request, outcome.getError());
             return UnifiedVerifyResult.failure(outcome.getError());
         }
 
@@ -88,6 +91,7 @@ public class UnifiedVerificationService {
             return UnifiedVerifyResult.success("Verification successful and recorded");
         } else {
             LOG.errorf("Callback failed for reference: %s", request.getReference());
+            saveFailure(request, "Internal callback failed");
             return UnifiedVerifyResult.failure("Internal callback failed");
         }
     }
@@ -169,6 +173,18 @@ public class UnifiedVerificationService {
                 .verifiedAt(LocalDateTime.now())
                 .build();
         payment.persist();
+    }
+
+    private void saveFailure(UnifiedVerifyRequest request, String reason) {
+        org.hmmk.verifier.model.FailedVerification failure = org.hmmk.verifier.model.FailedVerification.builder()
+                .senderId(request.getSenderId())
+                .reference(request.getReference())
+                .bankType(request.getBankType())
+                .reason(reason)
+                .merchantReferenceId(request.getMerchantReferenceId())
+                .failedAt(LocalDateTime.now())
+                .build();
+        failure.persist();
     }
 
     private VerificationOutcome validateReceiver(String bankType, VerificationOutcome outcome) {
