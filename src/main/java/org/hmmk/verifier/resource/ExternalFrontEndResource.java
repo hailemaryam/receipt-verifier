@@ -13,7 +13,17 @@ import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.hmmk.verifier.dto.OcrResult;
+import org.hmmk.verifier.dto.UnifiedVerifyRequest;
+import org.hmmk.verifier.dto.UnifiedVerifyResult;
 import org.hmmk.verifier.model.ReceiverAccount;
+import org.hmmk.verifier.service.OcrService;
+import org.jboss.logging.Logger;
+import org.jboss.resteasy.reactive.multipart.FileUpload;
+import org.jboss.resteasy.reactive.RestForm;
+
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 
 /**
@@ -21,12 +31,16 @@ import java.util.List;
  */
 @Path("/api/verify-receipt")
 @Produces(MediaType.APPLICATION_JSON)
-@Consumes(MediaType.APPLICATION_JSON)
 @Tag(name = "Receipt Verification For External Front End", description = "Endpoints for verifying payment receipts")
 public class ExternalFrontEndResource {
 
+        private static final Logger LOG = Logger.getLogger(ExternalFrontEndResource.class);
+
         @Inject
         org.hmmk.verifier.service.UnifiedVerificationService unifiedService;
+
+        @Inject
+        OcrService ocrService;
 
         @org.eclipse.microprofile.config.inject.ConfigProperty(name = "verifier.api-key")
         String apiKey;
@@ -39,6 +53,7 @@ public class ExternalFrontEndResource {
          * @return The process result
          */
         @POST
+        @Consumes(MediaType.APPLICATION_JSON)
         @Operation(summary = "Unified Bank Receipt Verification", description = "Verifies receipts across different banks, notifies external systems, and persists results")
         @APIResponses({
                         @APIResponse(responseCode = "200", description = "Verification process completed", content = @Content(schema = @Schema(implementation = org.hmmk.verifier.dto.UnifiedVerifyResult.class))),
@@ -71,9 +86,115 @@ public class ExternalFrontEndResource {
         }
 
         /**
+         * Screenshot upload endpoint for OCR-based receipt verification.
+         * Accepts a receipt screenshot, uses AI vision to extract bank type and
+         * reference,
+         * then feeds the result into the unified verification pipeline.
+         */
+        @POST
+        @Path("/upload-screenshot")
+        @Consumes(MediaType.MULTIPART_FORM_DATA)
+        @Operation(summary = "Verify Receipt via Screenshot", description = "Upload a receipt screenshot for OCR-based verification. Supports Telebirr and CBE receipts.")
+        @APIResponses({
+                        @APIResponse(responseCode = "200", description = "OCR and verification completed"),
+                        @APIResponse(responseCode = "400", description = "Invalid image or OCR failed"),
+                        @APIResponse(responseCode = "401", description = "Invalid or missing API-Key")
+        })
+        @Parameter(name = "API-Key", description = "Required API Key for authentication", required = true, in = ParameterIn.HEADER, schema = @Schema(type = SchemaType.STRING))
+        public Response verifyScreenshot(
+                        @HeaderParam("API-Key") String apiKeyHeader,
+                        @RestForm("file") FileUpload file,
+                        @RestForm("senderId") String senderId,
+                        @RestForm("merchantReferenceId") String merchantReferenceId,
+                        @RestForm("suffix") String suffix) {
+
+                if (apiKeyHeader == null || !apiKeyHeader.equals(apiKey)) {
+                        return Response.status(Response.Status.UNAUTHORIZED)
+                                        .entity(new ErrorResponse("Invalid or missing API-Key"))
+                                        .build();
+                }
+
+                if (file == null || file.filePath() == null) {
+                        return Response.status(Response.Status.BAD_REQUEST)
+                                        .entity(new ErrorResponse("No file uploaded"))
+                                        .build();
+                }
+
+                if (senderId == null || senderId.isBlank()) {
+                        return Response.status(Response.Status.BAD_REQUEST)
+                                        .entity(new ErrorResponse("senderId is required"))
+                                        .build();
+                }
+
+                try {
+                        // Read the uploaded file
+                        byte[] imageBytes = Files.readAllBytes(file.filePath());
+                        String mimeType = file.contentType() != null ? file.contentType() : "image/jpeg";
+
+                        LOG.infof("Received screenshot upload: %s (%d bytes, type: %s)",
+                                        file.fileName(), imageBytes.length, mimeType);
+
+                        // Step 1: OCR analysis
+                        OcrResult ocrResult = ocrService.analyzeReceipt(imageBytes, mimeType);
+
+                        if (!ocrResult.isSuccess()) {
+                                LOG.warnf("OCR analysis failed: %s", ocrResult.getError());
+                                return Response.status(Response.Status.BAD_REQUEST)
+                                                .entity(new ScreenshotResult(false, null, null, null,
+                                                                ocrResult.getError()))
+                                                .build();
+                        }
+
+                        LOG.infof("OCR detected bank: %s, reference: %s", ocrResult.getBankType(),
+                                        ocrResult.getReference());
+
+                        // Step 2: Feed into unified verification pipeline
+                        UnifiedVerifyRequest verifyRequest = UnifiedVerifyRequest.builder()
+                                        .bankType(ocrResult.getBankType())
+                                        .reference(ocrResult.getReference())
+                                        .suffix(suffix != null ? suffix : "")
+                                        .senderId(senderId)
+                                        .merchantReferenceId(merchantReferenceId != null ? merchantReferenceId : "")
+                                        .build();
+
+                        UnifiedVerifyResult verifyResult = unifiedService.processVerification(verifyRequest);
+
+                        ScreenshotResult result = new ScreenshotResult(
+                                        verifyResult.isSuccess(),
+                                        ocrResult.getBankType(),
+                                        ocrResult.getReference(),
+                                        verifyResult.getMessage(),
+                                        verifyResult.isSuccess() ? null : verifyResult.getMessage());
+
+                        if (verifyResult.isSuccess()) {
+                                return Response.ok(result).build();
+                        } else {
+                                return Response.status(Response.Status.BAD_REQUEST).entity(result).build();
+                        }
+
+                } catch (IOException e) {
+                        LOG.error("Error reading uploaded file", e);
+                        return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                                        .entity(new ErrorResponse("Failed to read uploaded file"))
+                                        .build();
+                }
+        }
+
+        /**
          * Simple error response DTO.
          */
         public record ErrorResponse(String error) {
+        }
+
+        /**
+         * Response for screenshot-based verification.
+         */
+        public record ScreenshotResult(
+                        boolean success,
+                        String detectedBank,
+                        String extractedReference,
+                        String message,
+                        String error) {
         }
 
         /**
