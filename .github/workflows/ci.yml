@@ -2,7 +2,7 @@ name: Deploy Quarkus API
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "sms-payment" ]
     paths:
       - "src/**"
       - "pom.xml"
@@ -33,7 +33,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "target/*"
-          target: "/var/www/receipt-verifier"
+          target: "/var/www/payment"
 
       - name: Restart Quarkus service
         uses: appleboy/ssh-action@v0.1.4
@@ -42,4 +42,4 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo systemctl restart receipt-verifier
+            sudo systemctl restart payment.service
