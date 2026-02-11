@@ -123,7 +123,7 @@ public class UnifiedVerificationService {
 
             HttpRequest callbackReq = HttpRequest.newBuilder()
                     .uri(URI.create(fullUrl))
-                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .timeout(Duration.ofSeconds(5))
                     .build();
