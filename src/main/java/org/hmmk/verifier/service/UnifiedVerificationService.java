@@ -13,13 +13,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,11 +36,8 @@ public class UnifiedVerificationService {
     @Inject
     DashenVerificationService dashenService;
 
-    @ConfigProperty(name = "verifier.callback.url", defaultValue = "https://n8n.memby.online/webhook/59dca007-f8ff-4321-99ae-62d545e8bef6")
+    @ConfigProperty(name = "verifier.callback.url", defaultValue = "https://fastsms.dev/api/payments/bank-transfer/confirm")
     String callbackUrl;
-
-    @ConfigProperty(name = "verifier.callback.secret")
-    String callbackSecret;
 
     private final HttpClient httpClient;
 
@@ -119,22 +112,19 @@ public class UnifiedVerificationService {
     private boolean sendCallback(String senderId, String reference, String bankType, BigDecimal amount,
             String merchantReferenceId) {
         try {
-            LOG.infof("Sending callback to %s", callbackUrl);
+            String transactionId = merchantReferenceId != null ? merchantReferenceId : "";
             String amountStr = amount != null ? amount.toString() : "0";
-            String jsonBody = String.format(
-                    "{\"senderId\":\"%s\", \"reference\":\"%s\", \"bankType\":\"%s\", \"amount\":%s, \"merchantReferenceId\":\"%s\"}",
-                    senderId, reference, bankType, amountStr,
-                    merchantReferenceId != null ? merchantReferenceId : "");
 
-            // Hash string: {reference}{secret}{senderId}{merchantReferenceId}
-            String hashString = String.format("%s%s%s%s", reference, callbackSecret, senderId, merchantReferenceId);
-            String signature = encryptSignature(hashString);
+            // Build the URL with query parameters
+            String fullUrl = String.format("%s?transactionId=%s&amount=%s",
+                    callbackUrl, transactionId, amountStr);
+
+            LOG.infof("Sending callback to %s", fullUrl);
 
             HttpRequest callbackReq = HttpRequest.newBuilder()
-                    .uri(URI.create(callbackUrl))
-                    .header("Content-Type", "application/json")
-                    .header("x-api-signature", signature)
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .uri(URI.create(fullUrl))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.noBody())
                     .timeout(Duration.ofSeconds(5))
                     .build();
 
@@ -144,17 +134,6 @@ public class UnifiedVerificationService {
         } catch (Exception e) {
             LOG.error("Error sending callback", e);
             return false;
-        }
-    }
-
-    private String encryptSignature(String hashString) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] encodedHash = digest.digest(hashString.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(encodedHash);
-        } catch (NoSuchAlgorithmException e) {
-            LOG.error("Error creating SHA-256 hash", e);
-            throw new RuntimeException("SHA-256 algorithm not found", e);
         }
     }
 
