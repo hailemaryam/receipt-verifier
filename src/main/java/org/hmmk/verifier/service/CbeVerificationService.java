@@ -260,11 +260,15 @@ public class CbeVerificationService {
 
         // Try different date formats
         String[] formats = {
+                "M/d/yyyy, h:mm:ss a",
+                "M/d/yyyy h:mm:ss a",
+                "d/M/yyyy, h:mm:ss a",
+                "d/M/yyyy h:mm:ss a",
+                "yyyy-MM-dd HH:mm:ss",
                 "MM/dd/yyyy, h:mm:ss a",
                 "MM/dd/yyyy h:mm:ss a",
                 "dd/MM/yyyy, h:mm:ss a",
-                "dd/MM/yyyy h:mm:ss a",
-                "yyyy-MM-dd HH:mm:ss"
+                "dd/MM/yyyy h:mm:ss a"
         };
 
         for (String format : formats) {
