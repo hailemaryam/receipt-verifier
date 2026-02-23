@@ -17,6 +17,8 @@ import org.hmmk.verifier.dto.OcrResult;
 import org.hmmk.verifier.dto.UnifiedVerifyRequest;
 import org.hmmk.verifier.dto.UnifiedVerifyResult;
 import org.hmmk.verifier.model.ReceiverAccount;
+import org.hmmk.verifier.model.FailedVerification;
+import org.hmmk.verifier.dto.common.PaginatedResponse;
 import org.hmmk.verifier.service.OcrService;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
@@ -237,7 +239,7 @@ public class ExternalFrontEndResource {
         @Path("/failed")
         @Operation(summary = "Get Failed Verification Attempts", description = "Returns a list of failed verification attempts, ordered by latest first")
         @APIResponses({
-                        @APIResponse(responseCode = "200", description = "Failed attempts retrieved successfully", content = @Content(schema = @Schema(implementation = org.hmmk.verifier.model.FailedVerification.class))),
+                        @APIResponse(responseCode = "200", description = "Failed attempts retrieved successfully", content = @Content(schema = @Schema(implementation = PaginatedResponse.class))),
                         @APIResponse(responseCode = "401", description = "Invalid or missing API-Key")
         })
         @Parameter(name = "API-Key", description = "Required API Key for authentication", required = true, in = ParameterIn.HEADER, schema = @Schema(type = SchemaType.STRING))
@@ -251,11 +253,13 @@ public class ExternalFrontEndResource {
                                         .build();
                 }
 
-                List<org.hmmk.verifier.model.FailedVerification> list = org.hmmk.verifier.model.FailedVerification
+                List<FailedVerification> list = FailedVerification
                                 .find("order by failedAt desc")
                                 .page(page, size)
                                 .list();
 
-                return Response.ok(list).build();
+                long total = FailedVerification.count();
+
+                return Response.ok(new PaginatedResponse<>(list, total, page, size)).build();
         }
 }
