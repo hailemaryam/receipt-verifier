@@ -6,13 +6,13 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
-import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.hmmk.verifier.model.VerifiedPayment;
+import org.hmmk.verifier.dto.common.PaginatedResponse;
 
 import org.hmmk.verifier.dto.VerifiedPaymentFilter;
 import java.util.List;
@@ -38,9 +38,9 @@ public class VerifiedPaymentResource {
     @Path("/list")
     @Operation(summary = "List Verified Payments", description = "Returns a paginated list of verified payments with optional filters")
     @APIResponses({
-            @APIResponse(responseCode = "200", description = "Successfully retrieved list", content = @Content(mediaType = "application/json", schema = @Schema(type = SchemaType.ARRAY, implementation = VerifiedPayment.class)))
+            @APIResponse(responseCode = "200", description = "Successfully retrieved list", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PaginatedResponse.class)))
     })
-    public List<VerifiedPayment> list(VerifiedPaymentFilter filter) {
+    public PaginatedResponse<VerifiedPayment> list(VerifiedPaymentFilter filter) {
 
         StringBuilder query = new StringBuilder("1=1");
         Parameters params = new Parameters();
@@ -65,9 +65,13 @@ public class VerifiedPaymentResource {
             params.and("toDate", filter.getToDate());
         }
 
-        return VerifiedPayment.find(query.toString(), params)
+        List<VerifiedPayment> items = VerifiedPayment.find(query.toString(), params)
                 .page(Page.of(filter.getPage(), filter.getPageSize()))
                 .list();
+
+        long total = VerifiedPayment.count(query.toString(), params);
+
+        return new PaginatedResponse<>(items, total, filter.getPage(), filter.getPageSize());
     }
 
     /**
