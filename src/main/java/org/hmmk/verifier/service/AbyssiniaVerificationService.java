@@ -86,7 +86,8 @@ public class AbyssiniaVerificationService {
                         response.statusCode());
                 if (attempt == maxAttempts) {
                     return AbyssiniaVerifyResult
-                            .failure("HTTP error: " + response.statusCode() + " after " + maxAttempts + " attempts");
+                            .failure("HTTP error: " + response.statusCode() + " after " + maxAttempts
+                                    + " attempts. your input might be wrong check again.");
                 }
 
             } catch (IOException | InterruptedException e) {
@@ -173,7 +174,8 @@ public class AbyssiniaVerificationService {
             }
 
             return AbyssiniaVerifyResult.success(
-                    payerName, sourceAccount, sourceAccountName, receiverAccount, receiverName,amount, date, reference, narrative);
+                    payerName, sourceAccount, sourceAccountName, receiverAccount, receiverName, amount, date, reference,
+                    narrative);
 
         } catch (IOException e) {
             LOG.errorf("❌ Failed to parse Abyssinia JSON: %s", e.getMessage());

@@ -135,7 +135,8 @@ public class CbeVerificationService {
                             response.statusCode());
                     if (attempt == maxAttempts) {
                         return CbeVerifyResult.failure(
-                                "HTTP error: " + response.statusCode() + " after " + maxAttempts + " attempts");
+                                "HTTP error: " + response.statusCode() + " after " + maxAttempts
+                                        + " attempts. your input might be wrong check again.");
                     }
                 }
 
