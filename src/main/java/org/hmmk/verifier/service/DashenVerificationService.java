@@ -107,7 +107,8 @@ public class DashenVerificationService {
                         response.statusCode());
                 if (attempt == maxAttempts) {
                     return DashenVerifyResult
-                            .failure("HTTP error: " + response.statusCode() + " after " + maxAttempts + " attempts");
+                            .failure("HTTP error: " + response.statusCode() + " after " + maxAttempts
+                                    + " attempts. your input might be wrong check again.");
                 }
 
             } catch (IOException | InterruptedException e) {
