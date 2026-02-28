@@ -28,6 +28,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.List;
 
+import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
+
 /**
  * REST resource for receipt verification endpoints.
  */
@@ -55,6 +58,7 @@ public class ExternalFrontEndResource {
          * @return The process result
          */
         @POST
+        @PermitAll
         @Consumes(MediaType.APPLICATION_JSON)
         @Operation(summary = "Unified Bank Receipt Verification", description = "Verifies receipts across different banks, notifies external systems, and persists results")
         @APIResponses({
@@ -95,6 +99,7 @@ public class ExternalFrontEndResource {
          */
         @POST
         @Path("/upload-screenshot")
+        @PermitAll
         @Consumes(MediaType.MULTIPART_FORM_DATA)
         @Operation(summary = "Verify Receipt via Screenshot", description = "Upload a receipt screenshot for OCR-based verification. Supports Telebirr and CBE receipts.")
         @APIResponses({
@@ -204,6 +209,7 @@ public class ExternalFrontEndResource {
          * returning it will load balance bank account from each bank
          */
         @GET
+        @PermitAll
         @jakarta.transaction.Transactional
         @Operation(summary = "Get Bank Account List", description = "Returns a list of bank accounts with load balance")
         @APIResponses({
@@ -237,6 +243,7 @@ public class ExternalFrontEndResource {
          */
         @GET
         @Path("/failed")
+        @RolesAllowed({ "verify-admin" })
         @Operation(summary = "Get Failed Verification Attempts", description = "Returns a list of failed verification attempts, ordered by latest first")
         @APIResponses({
                         @APIResponse(responseCode = "200", description = "Failed attempts retrieved successfully", content = @Content(schema = @Schema(implementation = PaginatedResponse.class))),
