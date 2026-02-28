@@ -1,5 +1,6 @@
 package org.hmmk.verifier.resource;
 
+import jakarta.annotation.security.RolesAllowed;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Parameters;
 import jakarta.ws.rs.*;
@@ -36,6 +37,7 @@ public class VerifiedPaymentResource {
      */
     @POST
     @Path("/list")
+    @RolesAllowed({ "verify-admin" })
     @Operation(summary = "List Verified Payments", description = "Returns a paginated list of verified payments with optional filters")
     @APIResponses({
             @APIResponse(responseCode = "200", description = "Successfully retrieved list", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PaginatedResponse.class)))
@@ -81,6 +83,7 @@ public class VerifiedPaymentResource {
      * @return The verified payment or 404
      */
     @GET
+    @RolesAllowed({ "verify-admin" })
     @Path("/{id}")
     @Operation(summary = "Get Verified Payment by ID", description = "Returns details of a specific verified payment")
     public Response getById(@PathParam("id") Long id) {

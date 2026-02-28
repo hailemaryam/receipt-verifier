@@ -1,5 +1,6 @@
 package org.hmmk.verifier.resource;
 
+import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -50,6 +51,7 @@ public class VerificationResource {
          * @return The verified receipt data or 404 if not found/invalid
          */
         @GET
+        @PermitAll
         @Path("/telebirr/{reference}")
         @Operation(summary = "Verify Telebirr Receipt", description = "Fetches and verifies a Telebirr payment receipt by its transaction reference number")
         @APIResponses({
@@ -83,6 +85,7 @@ public class VerificationResource {
          * @return The verification result
          */
         @GET
+        @PermitAll
         @Path("/cbe")
         @Operation(summary = "Verify CBE Receipt", description = "Fetches and verifies a Commercial Bank of Ethiopia payment receipt by reference and account suffix")
         @APIResponses({
@@ -117,6 +120,7 @@ public class VerificationResource {
          * @return The verification result
          */
         @GET
+        @PermitAll
         @Path("/abyssinia")
         @Operation(summary = "Verify Abyssinia Receipt", description = "Fetches and verifies a Bank of Abyssinia payment receipt by reference and account suffix")
         @APIResponses({
@@ -149,25 +153,29 @@ public class VerificationResource {
          * @param reference The Dashen transaction reference number
          * @return The verification result
          */
-//        @GET
-//        @Path("/dashen/{reference}")
-//        @Operation(summary = "Verify Dashen Receipt", description = "Fetches and verifies a Dashen Bank payment receipt by its transaction reference number")
-//        @APIResponses({
-//                        @APIResponse(responseCode = "200", description = "Verification completed", content = @Content(schema = @Schema(implementation = DashenVerifyResult.class))),
-//                        @APIResponse(responseCode = "400", description = "Invalid reference")
-//        })
-//        public Response verifyDashen(
-//                        @Parameter(description = "Dashen transaction reference number", required = true) @PathParam("reference") String reference) {
-//
-//                if (reference == null || reference.isBlank()) {
-//                        return Response.status(Response.Status.BAD_REQUEST)
-//                                        .entity(new ErrorResponse("Reference is required"))
-//                                        .build();
-//                }
-//
-//                DashenVerifyResult result = dashenService.verifyDashen(reference.trim());
-//                return Response.ok(result).build();
-//        }
+        // @GET
+        // @Path("/dashen/{reference}")
+        // @Operation(summary = "Verify Dashen Receipt", description = "Fetches and
+        // verifies a Dashen Bank payment receipt by its transaction reference number")
+        // @APIResponses({
+        // @APIResponse(responseCode = "200", description = "Verification completed",
+        // content = @Content(schema = @Schema(implementation =
+        // DashenVerifyResult.class))),
+        // @APIResponse(responseCode = "400", description = "Invalid reference")
+        // })
+        // public Response verifyDashen(
+        // @Parameter(description = "Dashen transaction reference number", required =
+        // true) @PathParam("reference") String reference) {
+        //
+        // if (reference == null || reference.isBlank()) {
+        // return Response.status(Response.Status.BAD_REQUEST)
+        // .entity(new ErrorResponse("Reference is required"))
+        // .build();
+        // }
+        //
+        // DashenVerifyResult result = dashenService.verifyDashen(reference.trim());
+        // return Response.ok(result).build();
+        // }
 
         /**
          * Simple error response DTO.
