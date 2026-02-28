@@ -5,6 +5,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.hmmk.verifier.model.ReceiverAccount;
+import jakarta.annotation.security.RolesAllowed;
 
 import java.util.List;
 
@@ -19,6 +20,7 @@ public class ReceiverAccountResource {
     }
 
     @GET
+    @RolesAllowed({ "verify-admin" })
     @Path("/{id}")
     public ReceiverAccount getOne(@PathParam("id") Long id) {
         ReceiverAccount entity = ReceiverAccount.findById(id);
@@ -29,6 +31,7 @@ public class ReceiverAccountResource {
     }
 
     @POST
+    @RolesAllowed({ "verify-admin" })
     @Transactional
     public Response create(ReceiverAccount receiverAccount) {
         if (receiverAccount.id != null) {
@@ -39,6 +42,7 @@ public class ReceiverAccountResource {
     }
 
     @PUT
+    @RolesAllowed({ "verify-admin" })
     @Path("/{id}")
     @Transactional
     public ReceiverAccount update(@PathParam("id") Long id, ReceiverAccount receiverAccount) {
@@ -55,6 +59,7 @@ public class ReceiverAccountResource {
     }
 
     @DELETE
+    @RolesAllowed({ "verify-admin" })
     @Path("/{id}")
     @Transactional
     public Response delete(@PathParam("id") Long id) {
